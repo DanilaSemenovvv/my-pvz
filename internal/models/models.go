@@ -7,4 +7,5 @@ type Order struct {
 	UserID      int       `json:"userID"`
 	SaveDate    time.Time `json:"saveDate"`
 	OrderIssued bool      `json:"orderIssued"`
+	IssuedAt    time.Time `json:"issuedAt"`
 }
