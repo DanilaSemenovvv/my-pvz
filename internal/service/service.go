@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/DanilaSemenovvv/my-pvz/internal/models"
@@ -46,11 +47,18 @@ func NewOrderService(repo repository.Repository) (*OrderService, error) {
 		s.byUserID[o.UserID] = append(s.byUserID[o.UserID], i)
 	}
 
+	temp := make([]int, 0, len(orders)/10)
 	for i, o := range orders {
 		if o.OrderIssued {
-			s.issuedOrders = append([]int{i}, s.issuedOrders...)
+			temp = append(temp, i)
 		}
 	}
+
+	sort.Slice(temp, func(i, j int) bool {
+		return orders[temp[i]].IssuedAt.After(orders[temp[j]].IssuedAt)
+	})
+
+	s.issuedOrders = temp
 
 	return s, nil
 }
@@ -117,6 +125,17 @@ func (s *OrderService) rebuildByUserID() {
 	}
 }
 
+func (s *OrderService) removeFromIssuedOrders(targetIdx int) {
+	for i, idx := range s.issuedOrders {
+		if idx == targetIdx {
+			last := len(s.issuedOrders) - 1
+			s.issuedOrders[i] = s.issuedOrders[last]
+			s.issuedOrders = s.issuedOrders[:last]
+			return
+		}
+	}
+}
+
 func (s *OrderService) ProcessClientOrders(userID int, ordersIDs []int, action string) ([]int, []int, []string, error) {
 	now := time.Now()
 
@@ -171,6 +190,7 @@ func (s *OrderService) ProcessClientOrders(userID int, ordersIDs []int, action s
 
 			order.OrderIssued = false
 			order.IssuedAt = time.Time{}
+			s.removeFromIssuedOrders(idx)
 			success = append(success, id)
 			messages = append(messages, fmt.Sprintf("Заказ %d: возврат принят", id))
 
@@ -223,7 +243,7 @@ func (s *OrderService) GetReturnableOrders(page, pageSize int) ([]models.Order, 
 	now := time.Now()
 	threshold := now.Add(-48 * time.Hour)
 
-	returnable := make([]models.Order, 0)
+	returnable := make([]models.Order, 0, len(s.issuedOrders)/2)
 
 	for _, idx := range s.issuedOrders {
 		order := s.orders[idx]
@@ -245,4 +265,25 @@ func (s *OrderService) GetReturnableOrders(page, pageSize int) ([]models.Order, 
 	}
 
 	return returnable[start:end], total, nil
+}
+
+func (s *OrderService) GetAllOrders(page, pageSize int) ([]models.Order, int, error) {
+	total := len(s.orders)
+
+	sorted := make([]models.Order, len(s.orders))
+	copy(sorted, s.orders)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].ID < sorted[j].ID
+	})
+
+	start := (page - 1) * pageSize
+	if start >= total {
+		return nil, total, nil
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+
+	return sorted[start:end], total, nil
 }

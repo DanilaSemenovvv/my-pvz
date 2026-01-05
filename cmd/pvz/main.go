@@ -234,9 +234,88 @@ func main() {
 			fmt.Printf("\nВсего показано: %d заказов\n", len(orderList))
 
 		case "5":
-			fmt.Println(5)
+			now := time.Now()
+			page, err := handler.GetIntInput("Введите номер страницы (1,2,...): ", scanner)
+			if err != nil {
+				fmt.Println("Ошибка ввода страницы:", err)
+				continue
+			}
+			if page < 1 {
+				page = 1
+			}
+			pageSize := 10
+
+			returnableOrders, total, err := orderService.GetReturnableOrders(page, pageSize)
+			if err != nil {
+				fmt.Println("Ошибка:", err)
+				continue
+			}
+
+			if total == 0 {
+				fmt.Println("Нет заказов, которые можно вернуть.")
+				continue
+			}
+
+			pages := (total + pageSize - 1) / pageSize // кол-во страниц
+			if len(returnableOrders) == 0 {
+				fmt.Printf("Страница %d пуста. Всего заказов: %d (страниц: %d)\n", page, total, pages)
+				continue
+			}
+
+			fmt.Printf("\nСписок возвратов (страница %d из %d, всего %d):\n\n", page, pages, total)
+
+			for i, order := range returnableOrders {
+				remaining := 48*time.Hour - now.Sub(order.IssuedAt)
+				hours := int(remaining.Hours())
+				minutes := int(remaining.Minutes()) % 60
+
+				fmt.Printf("%d. Заказ #%d | Клиент #%d | Выдан: %s | Осталось: %dч %dмин\n",
+					i+1, order.ID, order.UserID, order.IssuedAt.Format("02.01.2006 15:04"), hours, minutes)
+			}
+
 		case "6":
-			fmt.Println(6)
+			now := time.Now()
+			page, err := handler.GetIntInput("Введите номер страницы (1,2,...): ", scanner)
+			if err != nil {
+				fmt.Println("Ошибка ввода страницы:", err)
+				continue
+			}
+			if page < 1 {
+				page = 1
+			}
+			pageSize := 10
+			allOrders, total, err := orderService.GetAllOrders(page, pageSize)
+			if err != nil {
+				fmt.Println("Ошибка: ", err)
+				continue
+			}
+
+			if total == 0 {
+				fmt.Println("Нет заказов.")
+				continue
+			}
+
+			pages := (total + pageSize - 1) / pageSize // кол-во страниц
+			if len(allOrders) == 0 {
+				fmt.Printf("Страница %d пуста. Всего заказов: %d (страниц: %d)\n", page, total, pages)
+				continue
+			}
+
+			fmt.Printf("\nСписок всех заказов (страница %d из %d, всего %d):\n\n", page, pages, total)
+
+			for i, order := range allOrders {
+				status := "На хранении"
+				if order.OrderIssued {
+					status = "Выдан клиенту"
+				} else if order.SaveDate.Before(now) {
+					status = "Просрочен"
+				} else if !order.IssuedAt.IsZero() { // был выдан и возвращён
+					status = "Возврат принят"
+				}
+
+				fmt.Printf("%d. Заказ #%d | Клиент #%d | Хранение до: %s | Статус: %s\n",
+					i+1, order.ID, order.UserID, order.SaveDate.Format("02.01.2006"), status)
+			}
 		default:
 			fmt.Println("Неверный выбор, попробуйте снова")
 		}
